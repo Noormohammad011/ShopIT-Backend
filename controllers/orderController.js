@@ -95,13 +95,22 @@ const updateOrderToDelivered = asyncHandler(async (req, res) => {
   }
 })
 
-async function updateStock(id, quantity) {
-  const product = await Product.findById(id)
 
-  product.countInStock = product.countInStock - quantity
+async function updateStock(id, quantity) { 
+  //update stock bulk update
+  await Product.updateOne(
+    { _id: id },
+    { $inc: { countInStock: -quantity } }
+  ).exec()
 
-  await product.save({ validateBeforeSave: false })
 }
+// async function updateStock(id, quantity) {
+//   const product = await Product.findById(id)
+
+//   product.countInStock = product.countInStock - quantity
+
+//   await product.save({ validateBeforeSave: false })
+// }
 
 // @desc    Get logged in user orders
 // @route   GET /api/orders/myorders
