@@ -1,6 +1,13 @@
 import asyncHandler from 'express-async-handler'
 import Order from '../models/orderModel.js'
 import Product from '../models/productModel.js'
+import dotenv from 'dotenv'
+dotenv.config()
+import Stripe from 'stripe'
+import { v4 as uuidv4 } from 'uuid'
+const stripe = Stripe(`${process.env.STIPE_SECRET_KEY}`)
+
+
 // @desc create new order
 // @route POST /api/orders
 // @access Private
@@ -48,7 +55,7 @@ const getOrderById = asyncHandler(async (req, res) => {
 })
 
 // @desc    Update order to paid
-// @route   GET /api/orders/:id/pay
+// @route   Update /api/orders/:id/pay
 // @access  Private
 const updateOrderToPaid = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id)
@@ -68,6 +75,54 @@ const updateOrderToPaid = asyncHandler(async (req, res) => {
 
     const updatedOrder = await order.save()
 
+    res.json(updatedOrder)
+  } else {
+    res.status(404)
+    throw new Error('Order not found')
+  }
+})
+
+// @desc    Update order to paid with stripe
+// @route   Ipdate /api/orders/:id/stripe
+// @access  Private
+
+const updateOrderToPaidStripe = asyncHandler(async (req, res) => { 
+  const order = await Order.findById(req.params.id)
+  const { stripeToken, totalPrice } = req.body
+
+  const customer = await stripe.customers.create({
+    email: stripeToken.email,
+    source: stripeToken.id,
+  })
+
+  const payment = await stripe.charges.create(
+    {
+      amount: totalPrice * 100,
+      currency: 'USD',
+      customer: customer.id,
+      receipt_email: stripeToken.email,
+    },
+    {
+      idempotencyKey: uuidv4(),
+    }
+  )
+
+  if (payment) {
+    order.orderItems.forEach(async (item) => {
+      await updateStock(item.product, item.qty)
+    })
+    order.isPaid = true
+    order.paidAt = Date.now()
+    order.paymentResult = {
+      id: payment.source.id,
+      street: stripeToken.card.address_line1,
+      city: stripeToken.card.address_city,
+      country: stripeToken.card.address_country,
+      pincode: stripeToken.card.address_zip,
+      paid: payment.paid,
+    }
+
+    const updatedOrder = await order.save()
     res.json(updatedOrder)
   } else {
     res.status(404)
@@ -105,13 +160,6 @@ async function updateStock(id, quantity) {
     }
   ).exec()
 }
-// async function updateStock(id, quantity) {
-//   const product = await Product.findById(id)
-
-//   product.countInStock = product.countInStock - quantity
-
-//   await product.save({ validateBeforeSave: false })
-// }
 
 // @desc    Get logged in user orders
 // @route   GET /api/orders/myorders
@@ -135,4 +183,5 @@ export {
   getMyOrders,
   getOrders,
   updateOrderToDelivered,
+  updateOrderToPaidStripe,
 }
