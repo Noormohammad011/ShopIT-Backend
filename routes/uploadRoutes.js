@@ -16,7 +16,11 @@ router.post(
         use_filename: true,
       }
     )
-    fs.unlinkSync(req.files.file.tempFilePath)
+    fs.rm('tmp', { recursive: true }, (err) => {
+      if (err) {
+        throw err
+      }
+    })
     return res.status(200).json({ image: result.secure_url })
   })
 )

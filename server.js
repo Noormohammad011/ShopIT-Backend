@@ -1,9 +1,13 @@
-import path from 'path'
 import express from 'express'
 import dotenv from 'dotenv'
 import colors from 'colors'
 import cors from 'cors'
 import fileUpload from 'express-fileupload'
+import mongoSanitize from 'express-mongo-sanitize'
+import xss from 'xss-clean'
+import helmet from 'helmet'
+import hpp from 'hpp'
+import compression from 'express-compression'
 import morgan from 'morgan'
 import { notFound, errorHandler } from './middleware/errorMiddleware.js'
 import connectDB from './config/db.js'
@@ -24,6 +28,8 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 app.use(express.json())
+// For parsing application/x-www-form-urlencoded
+app.use(express.urlencoded({ extended: true }))
 // Enable cors
 app.use(cors())
 // Enable file upload
@@ -35,6 +41,21 @@ cloudinary.config({
 //file upload
 app.use(fileUpload({ useTempFiles: true }))
 
+//compress response
+app.use(compression())
+
+//sanitize data
+app.use(mongoSanitize())
+
+//set security headers
+app.use(helmet())
+
+//prevent xss attacks
+app.use(xss())
+
+//prevent http param pollution
+app.use(hpp())
+
 
 app.use('/api/products', productRoutes)
 app.use('/api/users', userRoutes)
@@ -45,21 +66,9 @@ app.get('/api/config/paypal', (req, res) =>
   res.send(process.env.PAYPAL_CLIENT_ID)
 )
 
-const __dirname = path.resolve()
-app.use('/upload', express.static(path.join(__dirname, '/tmp')))
-
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '/frontend/build')))
-
-  app.get('*', (req, res) =>
-    res.sendFile(path.resolve(__dirname, 'frontend', 'build', 'index.html'))
-  )
-} else {
-  app.get('/', (req, res) => {
-    res.send('API is running....')
-  })
-}
-
+app.get('/', (req, res) => {
+  res.send('API is running....')
+})
 app.use(notFound)
 app.use(errorHandler)
 
