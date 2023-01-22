@@ -39,7 +39,12 @@ cloudinary.config({
   api_secret: process.env.CLOUD_API_SECRET,
 })
 //file upload
-app.use(fileUpload({ useTempFiles: true }))
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: '/tmp/',
+  })
+)
 
 //compress response
 app.use(compression())
@@ -55,7 +60,6 @@ app.use(xss())
 
 //prevent http param pollution
 app.use(hpp())
-
 
 app.use('/api/products', productRoutes)
 app.use('/api/users', userRoutes)
