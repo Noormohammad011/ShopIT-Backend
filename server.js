@@ -7,11 +7,11 @@ import fileUpload from 'express-fileupload'
 import morgan from 'morgan'
 import { notFound, errorHandler } from './middleware/errorMiddleware.js'
 import connectDB from './config/db.js'
-
+import { v2 as cloudinary } from 'cloudinary'
 import productRoutes from './routes/productRoutes.js'
 import userRoutes from './routes/userRoutes.js'
 import orderRoutes from './routes/orderRoutes.js'
-import uploadImage from './routes/uploadRoutes.js'
+import uploadRoutes from './routes/uploadRoutes.js'
 
 dotenv.config()
 
@@ -26,15 +26,20 @@ if (process.env.NODE_ENV === 'development') {
 app.use(express.json())
 // Enable cors
 app.use(cors())
-
+// Enable file upload
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_API_KEY,
+  api_secret: process.env.CLOUD_API_SECRET,
+})
 //file upload
-app.use(fileUpload())
+app.use(fileUpload({ useTempFiles: true }))
 
 
 app.use('/api/products', productRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/orders', orderRoutes)
-app.post('/api/upload/:id', uploadImage)
+app.use('/api/upload', uploadRoutes)
 
 app.get('/api/config/paypal', (req, res) =>
   res.send(process.env.PAYPAL_CLIENT_ID)

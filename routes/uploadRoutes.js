@@ -1,39 +1,24 @@
+import express from 'express'
+import __dirname from 'path'
 import asyncHandler from 'express-async-handler'
-import Product from '../models/productModel.js'
-import path from 'path'
-const uploadImage =
+import { v2 as cloudinary } from 'cloudinary'
+import fs from 'fs'
+const router = express.Router()
+
+
+router.post(
+  '/',
   asyncHandler(async (req, res) => {
-    const product = await Product.findById(req.params.id)
-    if (!product) {
-      res.status(404)
-      throw new Error('Product not found')
-    }
-    if (!req.files) {
-      res.status(400)
-      throw new Error('Please upload a file')
-    }
-    const file = req.files.file
-    if (!file.mimetype.startsWith('image')) {
-      res.status(400)
-      throw new Error('Please upload an image file')
-    }
-    if (file.size > process.env.MAX_FILE_UPLOAD) {
-      res.status(400)
-      throw new Error(
-        `Please upload an image less than ${process.env.MAX_FILE_UPLOAD}`
-      )
-    }
-    file.name = `photo_${product._id}${path.parse(file.name).ext}`
-    file.mv(`${process.env.FILE_UPLOAD_PATH}/${file.name}`, async (err) => {
-      if (err) {
-        console.error(err)
-        res.status(500)
-        throw new Error('Problem with file upload')
+    const result = await cloudinary.uploader.upload(
+      req.files.file.tempFilePath,
+      {
+        folder: 'product_image',
+        use_filename: true,
       }
-      const imageUrl = `images/${file.name}`
-      await Product.findByIdAndUpdate(req.params.id, { image: imageUrl })
-      res.status(200).json(file.name)
-    })
-  }) 
-  
-export default uploadImage
+    )
+    fs.unlinkSync(req.files.file.tempFilePath)
+    return res.status(200).json({ image: result.secure_url })
+  })
+)
+
+export default router
