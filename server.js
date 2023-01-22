@@ -3,6 +3,7 @@ import express from 'express'
 import dotenv from 'dotenv'
 import colors from 'colors'
 import cors from 'cors'
+import fileUpload from 'express-fileupload'
 import morgan from 'morgan'
 import { notFound, errorHandler } from './middleware/errorMiddleware.js'
 import connectDB from './config/db.js'
@@ -10,7 +11,7 @@ import connectDB from './config/db.js'
 import productRoutes from './routes/productRoutes.js'
 import userRoutes from './routes/userRoutes.js'
 import orderRoutes from './routes/orderRoutes.js'
-import uploadRoutes from './routes/uploadRoutes.js'
+import uploadImage from './routes/uploadRoutes.js'
 
 dotenv.config()
 
@@ -26,11 +27,14 @@ app.use(express.json())
 // Enable cors
 app.use(cors())
 
+//file upload
+app.use(fileUpload())
+
 
 app.use('/api/products', productRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/orders', orderRoutes)
-app.use('/api/upload', uploadRoutes)
+app.post('/api/upload/:id', uploadImage)
 
 app.get('/api/config/paypal', (req, res) =>
   res.send(process.env.PAYPAL_CLIENT_ID)
