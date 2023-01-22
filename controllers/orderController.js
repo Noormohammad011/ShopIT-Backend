@@ -54,7 +54,7 @@ const updateOrderToPaid = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id)
 
   if (order) {
-    order.orderItems.forEach(async (item) => { 
+    order.orderItems.forEach(async (item) => {
       await updateStock(item.product, item.qty)
     })
     order.isPaid = true
@@ -75,7 +75,6 @@ const updateOrderToPaid = asyncHandler(async (req, res) => {
   }
 })
 
-
 // @desc    Update order to delivered
 // @route   GET /api/orders/:id/deliver
 // @access  Private/Admin
@@ -95,14 +94,16 @@ const updateOrderToDelivered = asyncHandler(async (req, res) => {
   }
 })
 
-
-async function updateStock(id, quantity) { 
+async function updateStock(id, quantity) {
   //update stock bulk update
   await Product.updateOne(
     { _id: id },
-    { $inc: { countInStock: -quantity } }
+    { $inc: { countInStock: -quantity } },
+    {
+      new: true,
+      runValidators: true,
+    }
   ).exec()
-
 }
 // async function updateStock(id, quantity) {
 //   const product = await Product.findById(id)
