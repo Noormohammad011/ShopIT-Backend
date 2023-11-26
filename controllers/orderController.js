@@ -4,7 +4,7 @@ import Product from '../models/productModel.js'
 import dotenv from 'dotenv'
 dotenv.config()
 import Stripe from 'stripe'
-import { v4 as uuidv4 } from 'uuid'
+import mongoose from 'mongoose'
 const stripe = Stripe(`${process.env.STIPE_SECRET_KEY}`)
 
 
@@ -58,77 +58,111 @@ const getOrderById = asyncHandler(async (req, res) => {
 // @route   Update /api/orders/:id/pay
 // @access  Private
 const updateOrderToPaid = asyncHandler(async (req, res) => {
-  const order = await Order.findById(req.params.id)
+  const session = await mongoose.startSession()
+  session.startTransaction()
 
-  if (order) {
-    order.orderItems.forEach(async (item) => {
-      await updateStock(item.product, item.qty)
-    })
-    order.isPaid = true
-    order.paidAt = Date.now()
-    order.paymentResult = {
-      id: req.body.id,
-      status: req.body.status,
-      update_time: req.body.update_time,
-      email_address: req.body.payer.email_address,
+  try {
+    const order = await Order.findById(req.params.id).session(session)
+
+    if (order) {
+      for (const item of order.orderItems) {
+        await updateStock(item.product, item.qty, session)
+      }
+
+      order.isPaid = true
+      order.paidAt = Date.now()
+      order.paymentResult = {
+        id: req.body.id,
+        status: req.body.status,
+        update_time: req.body.update_time,
+        email_address: req.body.payer.email_address,
+      }
+
+      const updatedOrder = await order.save({ session })
+      await session.commitTransaction()
+
+      res.json(updatedOrder)
+    } else {
+      res.status(404)
+      throw new Error('Order not found')
     }
-
-    const updatedOrder = await order.save()
-
-    res.json(updatedOrder)
-  } else {
-    res.status(404)
-    throw new Error('Order not found')
+  } catch (error) {
+    await session.abortTransaction()
+    throw error
+  } finally {
+    session.endSession()
   }
 })
+
 
 // @desc    Update order to paid with stripe
 // @route   Ipdate /api/orders/:id/stripe
 // @access  Private
 
-const updateOrderToPaidStripe = asyncHandler(async (req, res) => { 
-  const order = await Order.findById(req.params.id)
-  const { stripeToken, totalPrice } = req.body
+const updateOrderToPaidStripe = asyncHandler(async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
 
-  const customer = await stripe.customers.create({
-    email: stripeToken.email,
-    source: stripeToken.id,
-  })
+  try {
+    const order = await Order.findById(req.params.id).session(session)
+    const { stripeToken, totalPrice } = req.body
 
-  const payment = await stripe.charges.create(
-    {
-      amount: totalPrice * 100,
-      currency: 'USD',
-      customer: customer.id,
-      receipt_email: stripeToken.email,
-    },
-    {
-      idempotencyKey: uuidv4(),
-    }
-  )
-
-  if (payment) {
-    order.orderItems.forEach(async (item) => {
-      await updateStock(item.product, item.qty)
+    const customer = await stripe.customers.create({
+      email: stripeToken.email,
+      source: stripeToken.id,
     })
-    order.isPaid = true
-    order.paidAt = Date.now()
-    order.paymentResult = {
-      id: payment.source.id,
-      street: stripeToken.card.address_line1,
-      city: stripeToken.card.address_city,
-      country: stripeToken.card.address_country,
-      pincode: stripeToken.card.address_zip,
-      paid: payment.paid,
-    }
 
-    const updatedOrder = await order.save()
-    res.json(updatedOrder)
-  } else {
-    res.status(404)
-    throw new Error('Order not found')
+    const payment = await stripe.charges.create(
+      {
+        amount: totalPrice * 100,
+        currency: 'USD',
+        customer: customer.id,
+      }
+    )
+
+    if (payment) {
+      for (const item of order.orderItems) {
+        await updateStock(item.product, item.qty, session)
+      }
+
+      order.isPaid = true
+      order.paidAt = Date.now()
+      order.paymentResult = {
+        id: payment.source.id,
+        street: stripeToken.card.address_line1,
+        city: stripeToken.card.address_city,
+        country: stripeToken.card.address_country,
+        pincode: stripeToken.card.address_zip,
+        paid: payment.paid,
+      }
+
+      const updatedOrder = await order.save({ session })
+      await session.commitTransaction()
+      res.json(updatedOrder)
+    } else {
+      res.status(404)
+      throw new Error('Order not found')
+    }
+  } catch (error) {
+    await session.abortTransaction()
+    throw error
+  } finally {
+    session.endSession()
   }
 })
+
+async function updateStock(id, quantity, session) {
+  await Product.updateOne(
+    { _id: id },
+    { $inc: { countInStock: -quantity } },
+    {
+      new: true,
+      runValidators: true,
+      session,
+    }
+  ).exec()
+}
+
 
 // @desc    Update order to delivered
 // @route   GET /api/orders/:id/deliver
@@ -149,17 +183,6 @@ const updateOrderToDelivered = asyncHandler(async (req, res) => {
   }
 })
 
-async function updateStock(id, quantity) {
-  //update stock bulk update
-  await Product.updateOne(
-    { _id: id },
-    { $inc: { countInStock: -quantity } },
-    {
-      new: true,
-      runValidators: true,
-    }
-  ).exec()
-}
 
 // @desc    Get logged in user orders
 // @route   GET /api/orders/myorders
