@@ -38,6 +38,21 @@ const getProductById = asyncHandler(async (req, res) => {
   }
 })
 
+// @desc Fetch related product
+// @route GET /api/products/related/:id
+// @access Public
+
+const getRelatedProduct = asyncHandler(async (req, res) => { 
+  const product = await Product.findById(req.params.id)
+  if (product) {
+    const related = await Product.find({category: product.category, _id: {$ne: product._id}}).limit(3)
+    res.json(related)
+  } else {
+    res.status(404)
+    throw new Error('Product not found')
+  }
+})
+
 // @desc Delete a product
 // @route DELETE /api/products/:id
 // @access private/admin
@@ -153,4 +168,5 @@ export {
   updateProduct,
   createProductReview,
   getTopProducts,
+  getRelatedProduct,
 }
