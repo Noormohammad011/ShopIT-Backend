@@ -14,6 +14,8 @@ router.post(
       {
         folder: 'product_image',
         use_filename: true,
+        allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
+        transformation: [{ width: 640, height: 510, crop: 'limit' }],
       }
     )
     fs.rm('tmp', { recursive: true }, (err) => {
