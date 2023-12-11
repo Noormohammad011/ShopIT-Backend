@@ -1,7 +1,10 @@
 import asyncHandler from 'express-async-handler'
 import User from '../models/userModel.js'
 import generateToken from '../utils/generateToken.js'
-
+import { OAuth2Client } from 'google-auth-library'
+import dotenv from 'dotenv'
+dotenv.config()
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 // @desc    Auth user & get token
 // @route   POST /api/users/login
 // @access  Public
@@ -166,6 +169,48 @@ const updateUser = asyncHandler(async (req, res) => {
   }
 })
 
+const googleLogin = asyncHandler(async (req, res) => {
+  const { idToken } = req.body
+
+  try {
+    const response = await client.getTokenInfo(idToken)
+    const { email_verified, email } = response
+    if (email_verified) {
+      const user = await User.findOne({ email }).exec()
+      if (user) {
+        return res.json({
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          isAdmin: user.isAdmin,
+          token: generateToken(user._id),
+        })
+      } else {
+        let password = email + process.env.JWT_SECRET
+        const newUser = new User({
+          name: email.split('@')[0],
+          email,
+          password,
+        })
+        const savedUser = await newUser.save()
+        return res.json({
+          _id: savedUser._id,
+          name: savedUser.name,
+          email: savedUser.email,
+          isAdmin: savedUser.isAdmin,
+          token: generateToken(savedUser._id),
+        })
+      }
+    } else {
+      res.status(401)
+      throw new Error('Google login failed. Try again')
+    }
+  } catch (err) {
+    res.status(401)
+    throw new Error(err.message)
+  }
+})
+
 export {
   authUser,
   getUserProfile,
@@ -175,4 +220,5 @@ export {
   deleteUser,
   updateUser,
   getUserById,
+  googleLogin,
 }
